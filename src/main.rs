@@ -16,7 +16,7 @@ enum Message {
     UpdatePressed,
 }
 
-static MONTH_ARRAY: [Month; 12] = [
+const MONTH_ARRAY: [Month; 12] = [
     Month::January,
     Month::February,
     Month::March,
@@ -31,7 +31,7 @@ static MONTH_ARRAY: [Month; 12] = [
     Month::December,
 ];
 
-static WEEKDAY_ARRAY: [Weekday; 7] = [
+const WEEKDAY_ARRAY: [Weekday; 7] = [
     Weekday::Sunday,
     Weekday::Monday,
     Weekday::Tuesday,
@@ -53,9 +53,9 @@ fn short_weekday(weekday: &Weekday) -> &str {
     }
 }
 
-static CALENDAR_WIDTH: u16 = 120;
-static CALENDAR_HEIGHT: u16 = 160;
-static SPACING: u16 = 8;
+const CALENDAR_WIDTH: u16 = 120;
+const CALENDAR_HEIGHT: u16 = 120;
+const SPACING: u16 = 8;
 
 impl App {
     fn view(&self) -> Element<Message> {
@@ -77,12 +77,16 @@ impl App {
         }))
         .spacing(SPACING);
 
-        let calendar_body = row(WEEKDAY_ARRAY.map(|weekday| {
-            container(text(short_weekday(&weekday).to_string()))
-                .width(CALENDAR_WIDTH)
-                .height(CALENDAR_HEIGHT)
-                .style(container::rounded_box)
-                .into()
+        let calendar_body = column((0..6).map(|_| {
+            row(WEEKDAY_ARRAY.map(|weekday| {
+                container(text(short_weekday(&weekday).to_string()))
+                    .width(CALENDAR_WIDTH)
+                    .height(CALENDAR_HEIGHT)
+                    .style(container::rounded_box)
+                    .into()
+            }))
+            .spacing(SPACING)
+            .into()
         }))
         .spacing(SPACING);
 
