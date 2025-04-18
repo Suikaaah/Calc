@@ -1,3 +1,4 @@
+use crate::util;
 use std::fmt::{Display, Formatter};
 use time::{Duration, Time};
 
@@ -18,19 +19,18 @@ pub enum TypeForPickList {
 }
 
 pub struct Config {
-    pub name: String,
     pub r#type: Type,
     pub pay: u32,
 }
 
-impl From<TimeRange> for Duration {
-    fn from(value: TimeRange) -> Self {
+impl From<&TimeRange> for Duration {
+    fn from(value: &TimeRange) -> Self {
         let TimeRange { begin, end } = value;
 
         if begin < end {
-            end - begin
+            *end - *begin
         } else {
-            end - begin + Duration::days(1)
+            *end - *begin + Duration::days(1)
         }
     }
 }
@@ -40,7 +40,7 @@ impl Type {
         match self {
             Self::PerTime => "-".to_string(),
             Self::PerHour(TimeRange { begin, end }) => format!(
-                "{}:{:02} - {}:{:02}",
+                "{: >2}:{:02} - {: >2}:{:02}",
                 begin.hour(),
                 begin.minute(),
                 end.hour(),
@@ -61,7 +61,21 @@ impl From<&Type> for TypeForPickList {
 
 impl Config {
     pub fn pay_to_string(&self) -> String {
-        format!("{} [{}]", self.pay, TypeForPickList::from(&self.r#type))
+        format!(
+            "{} [{}]",
+            util::comma_separated(self.pay),
+            TypeForPickList::from(&self.r#type)
+        )
+    }
+
+    pub fn sum(&self, count: usize) -> u32 {
+        match &self.r#type {
+            Type::PerTime => self.pay * count as u32,
+            Type::PerHour(tr) => {
+                (count as f32 * self.pay as f32 * Duration::from(tr).as_seconds_f32() / 3600.0)
+                    as u32
+            }
+        }
     }
 }
 
@@ -72,7 +86,7 @@ impl Display for TypeForPickList {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::PerTime => write!(f, "¥/time"),
-            Self::PerHour => write!(f, "¥/h"),
+            Self::PerHour => write!(f, "¥/hour"),
         }
     }
 }

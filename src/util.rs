@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use iced::{Element, Font, font, widget};
 use time::{Month, Weekday};
 
@@ -68,4 +70,24 @@ pub fn bold_text<'a>(text: impl widget::text::IntoFragment<'a>) -> widget::Text<
         weight: font::Weight::Bold,
         ..Default::default()
     })
+}
+
+pub fn monospace_text<'a>(text: impl widget::text::IntoFragment<'a>) -> widget::Text<'a> {
+    widget::text(text).font(Font {
+        family: font::Family::Monospace,
+        ..Default::default()
+    })
+}
+
+pub fn comma_separated(n: u32) -> String {
+    let mut buf = VecDeque::new();
+
+    for (i, char) in n.to_string().chars().rev().enumerate() {
+        if i != 0 && i % 3 == 0 {
+            buf.push_front(',');
+        }
+        buf.push_front(char);
+    }
+
+    buf.iter().collect()
 }
