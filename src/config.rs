@@ -1,33 +1,78 @@
 use std::fmt::{Display, Formatter};
+use time::{Duration, Time};
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TimeRange {
+    pub begin: Time,
+    pub end: Time,
+}
+
 pub enum Type {
+    PerTime,
+    PerHour(TimeRange),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TypeForPickList {
     PerTime,
     PerHour,
 }
 
-#[derive(Debug)]
 pub struct Config {
     pub name: String,
     pub r#type: Type,
     pub pay: u32,
 }
 
-impl Config {
-    pub fn pay_to_string(&self) -> String {
-        let unit = match self.r#type {
-            Type::PerTime => "¥/time",
-            Type::PerHour => "¥/h",
-        };
+impl From<TimeRange> for Duration {
+    fn from(value: TimeRange) -> Self {
+        let TimeRange { begin, end } = value;
 
-        format!("{} [{unit}]", self.pay)
+        if begin < end {
+            end - begin
+        } else {
+            end - begin + Duration::days(1)
+        }
     }
 }
 
-pub const TYPES: [Type; 2] = [Type::PerTime, Type::PerHour];
+impl Type {
+    pub fn time_range_to_string(&self) -> String {
+        match self {
+            Self::PerTime => "-".to_string(),
+            Self::PerHour(TimeRange { begin, end }) => format!(
+                "{}:{:02} - {}:{:02}",
+                begin.hour(),
+                begin.minute(),
+                end.hour(),
+                end.minute()
+            ),
+        }
+    }
+}
 
-impl Display for Type {
+impl From<&Type> for TypeForPickList {
+    fn from(value: &Type) -> Self {
+        match value {
+            Type::PerTime => Self::PerTime,
+            Type::PerHour(_) => Self::PerHour,
+        }
+    }
+}
+
+impl Config {
+    pub fn pay_to_string(&self) -> String {
+        format!("{} [{}]", self.pay, TypeForPickList::from(&self.r#type))
+    }
+}
+
+pub const TYPES_FOR_PICK_LIST: [TypeForPickList; 2] =
+    [TypeForPickList::PerTime, TypeForPickList::PerHour];
+
+impl Display for TypeForPickList {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self:?}")
+        match self {
+            Self::PerTime => write!(f, "¥/time"),
+            Self::PerHour => write!(f, "¥/h"),
+        }
     }
 }
