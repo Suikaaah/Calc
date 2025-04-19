@@ -6,7 +6,7 @@ mod util;
 
 use cell::Cell;
 use config::{Config, TimeRange, Type, TypeForPickList};
-use iced::{Background, Color, Element, Length, alignment, widget};
+use iced::{Color, Element, Length, Size, alignment, widget};
 use std::{collections::BTreeMap, fs};
 use time::{Date, Duration, Month, Time, Weekday};
 
@@ -29,11 +29,11 @@ struct App {
 impl Default for App {
     fn default() -> Self {
         Self {
-            month_selected: Default::default(),
+            month_selected: Some(Month::January),
             offset_input: Default::default(),
             year_input: Default::default(),
             name_input: Default::default(),
-            type_selected: Default::default(),
+            type_selected: Some(TypeForPickList::PerHour),
             pay_input: Default::default(),
             hour_begin_input: Default::default(),
             minute_begin_input: Default::default(),
@@ -72,13 +72,13 @@ enum Message {
 impl App {
     const OFFSET_WIDTH: u16 = 80;
     const YEAR_WIDTH: u16 = 80;
-    const NAME_WIDTH: u16 = 180;
-    const PAY_WIDTH: u16 = 140;
-    const TIME_WIDTH: u16 = 50;
+    const NAME_WIDTH: u16 = 162;
+    const PAY_WIDTH: u16 = 130;
+    const TIME_WIDTH: u16 = 41;
     const DURATION_WIDTH: u16 = 130;
-    const COUNT_WIDTH: u16 = 60;
-    const SUM_WIDTH: u16 = 140;
-    const FILENAME_WIDTH: u16 = 180;
+    const COUNT_WIDTH: u16 = 36;
+    const SUM_WIDTH: u16 = 122;
+    const RIGHT_WIDTH: u16 = 670;
     const CHECKBOX_SIZE: u16 = 28;
     const RESULT_SIZE: u16 = 32;
     const SPACING: u16 = 6;
@@ -192,7 +192,7 @@ impl App {
     }
 
     fn calendar_cell(&self, r: u8, c: u8) -> Element<Message> {
-        use widget::{button, checkbox, column, row, text};
+        use widget::{checkbox, column, row, text};
 
         let nth = r * Self::CALENDAR_COLUMNS + c;
 
@@ -234,19 +234,12 @@ impl App {
         column![
             row![chkbox, text(date_str).color(color).width(Length::Fill)],
             column(cell.config_names.iter().map(|name| {
-                let color = util::get_color(name);
-
-                button(
+                util::colored_thin_button(
                     text(name.as_str())
                         .width(Length::Fill)
                         .align_x(alignment::Horizontal::Center),
+                    util::get_color(name),
                 )
-                .style(move |_, _| button::Style {
-                    background: Some(Background::Color(color)),
-                    text_color: Color::WHITE,
-                    border: util::rounded_border(),
-                    ..Default::default()
-                })
                 .padding(0)
                 .on_press(Message::CellButtonPressed(name.to_owned(), nth))
                 .into()
@@ -302,7 +295,7 @@ impl App {
 
         let configs_io = row![
             text_input("Filename", &self.filename_input)
-                .width(Self::FILENAME_WIDTH)
+                .width(Length::Fill)
                 .on_input(Message::FilenameInput),
             button("Load").on_press(Message::LoadPressed),
             button("Save").on_press(Message::SavePressed),
@@ -323,7 +316,7 @@ impl App {
             ),
         ]
         .push_maybe(duration_input)
-        .push(button("Push").on_press(Message::PushPressed))
+        .push(button("v").on_press(Message::PushPressed))
         .spacing(Self::SPACING);
 
         let configs_top = if self.configs.is_empty() {
@@ -340,7 +333,7 @@ impl App {
                     top("Name", Self::NAME_WIDTH),
                     top("Pay", Self::PAY_WIDTH),
                     top("Duration", Self::DURATION_WIDTH),
-                    top("Count", Self::COUNT_WIDTH),
+                    top("#", Self::COUNT_WIDTH),
                     top("Sum", Self::SUM_WIDTH),
                 ]
                 .spacing(Self::SPACING),
@@ -362,15 +355,16 @@ impl App {
 
             sum += config.sum(count);
 
-            let color = util::get_color(name);
-
             row![
-                util::rounded_container_colored(
+                util::colored_thin_button(
                     text(name)
-                        .width(Self::NAME_WIDTH)
+                        .width(Length::Fill)
                         .align_x(alignment::Horizontal::Center),
-                    color
-                ),
+                    util::get_color(name),
+                )
+                .width(Self::NAME_WIDTH)
+                .padding(0)
+                .on_press(Message::AddPressed(name.to_owned())),
                 util::monospace_text(config.pay_to_string())
                     .width(Self::PAY_WIDTH)
                     .align_x(alignment::Horizontal::Right),
@@ -383,8 +377,7 @@ impl App {
                 util::monospace_text(util::yen(config.sum(count)))
                     .width(Self::SUM_WIDTH)
                     .align_x(alignment::Horizontal::Right),
-                button("Remove").on_press(Message::RemovePressed(name.to_string())),
-                button("Add").on_press(Message::AddPressed(name.to_string())),
+                button("x").on_press(Message::RemovePressed(name.to_owned())),
             ]
             .align_y(alignment::Vertical::Center)
             .spacing(Self::SPACING)
@@ -412,19 +405,6 @@ impl App {
         row![
             scrollable(
                 column![
-                    util::bold_text("Configurations"),
-                    configs_io,
-                    configs_input_and_top,
-                    configs_body,
-                    space(),
-                    util::bold_text("Result"),
-                    result_body,
-                ]
-                .padding(Self::PADDING)
-                .spacing(Self::SPACING)
-            ),
-            scrollable(
-                column![
                     util::bold_text("Date"),
                     month_offset_year,
                     space(),
@@ -440,6 +420,20 @@ impl App {
                 ]
                 .padding(Self::PADDING)
                 .spacing(Self::SPACING)
+            ),
+            scrollable(
+                column![
+                    util::bold_text("Configurations"),
+                    configs_io,
+                    configs_input_and_top,
+                    configs_body,
+                    space(),
+                    util::bold_text("Result"),
+                    result_body,
+                ]
+                .padding(Self::PADDING)
+                .spacing(Self::SPACING)
+                .width(Self::RIGHT_WIDTH)
             ),
         ]
         .spacing(Self::SPACING)
@@ -508,5 +502,12 @@ impl App {
 }
 
 fn main() -> iced::Result {
-    iced::run("Calc", App::update, App::view)
+    const WINDOW_SIZE: Size = Size {
+        width: 1600.0,
+        height: 800.0,
+    };
+
+    iced::application("Calc", App::update, App::view)
+        .window_size(WINDOW_SIZE)
+        .run()
 }

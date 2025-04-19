@@ -1,9 +1,8 @@
+use iced::{Background, Border, Color, Element, Font, border, font, widget};
 use std::{
     collections::VecDeque,
     hash::{DefaultHasher, Hasher},
 };
-
-use iced::{Background, Border, Color, Element, Font, border, font, widget};
 use time::{Month, Weekday};
 
 pub const MONTHS: [Month; 12] = [
@@ -60,25 +59,12 @@ pub const fn short_weekday(weekday: &Weekday) -> &str {
     }
 }
 
-pub fn rounded_container<'a, Message: 'a>(
+pub fn rounded_container<'a, Message>(
     content: impl Into<Element<'a, Message>>,
 ) -> widget::Container<'a, Message> {
     use widget::container;
 
     container(content).style(container::rounded_box)
-}
-
-pub fn rounded_container_colored<'a, Message: 'a>(
-    content: impl Into<Element<'a, Message>>,
-    color: Color,
-) -> widget::Container<'a, Message> {
-    use widget::container;
-
-    container(content).style(move |_| widget::container::Style {
-        border: rounded_border(),
-        background: Some(Background::Color(color)),
-        ..Default::default()
-    })
 }
 
 pub fn bold_text<'a>(text: impl widget::text::IntoFragment<'a>) -> widget::Text<'a> {
@@ -91,6 +77,20 @@ pub fn bold_text<'a>(text: impl widget::text::IntoFragment<'a>) -> widget::Text<
 pub fn monospace_text<'a>(text: impl widget::text::IntoFragment<'a>) -> widget::Text<'a> {
     widget::text(text).font(Font {
         family: font::Family::Monospace,
+        ..Default::default()
+    })
+}
+
+pub fn colored_thin_button<'a, Message>(
+    content: impl Into<Element<'a, Message>>,
+    color: Color,
+) -> widget::Button<'a, Message> {
+    use widget::button;
+
+    button(content).style(move |_, _| button::Style {
+        background: Some(Background::Color(color)),
+        text_color: Color::WHITE,
+        border: rounded_border(),
         ..Default::default()
     })
 }
@@ -109,7 +109,7 @@ pub fn comma_separated(n: u32) -> String {
 }
 
 pub fn yen(n: u32) -> String {
-    format!("{} [¥]", comma_separated(n))
+    format!("{} ¥", comma_separated(n))
 }
 
 pub fn get_color(text: &str) -> Color {
