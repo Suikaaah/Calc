@@ -1,6 +1,9 @@
-use std::collections::VecDeque;
+use std::{
+    collections::VecDeque,
+    hash::{DefaultHasher, Hasher},
+};
 
-use iced::{Element, Font, font, widget};
+use iced::{border, font, widget, Background, Border, Color, Element, Font};
 use time::{Month, Weekday};
 
 pub const MONTHS: [Month; 12] = [
@@ -65,6 +68,19 @@ pub fn rounded_container<'a, Message: 'a>(
     container(content).style(container::rounded_box)
 }
 
+pub fn rounded_container_colored<'a, Message: 'a>(
+    content: impl Into<Element<'a, Message>>,
+    color: Color,
+) -> widget::Container<'a, Message> {
+    use widget::container;
+
+    container(content).style(move |_| widget::container::Style {
+        border: rounded_border(),
+        background: Some(Background::Color(color)),
+        ..Default::default()
+    })
+}
+
 pub fn bold_text<'a>(text: impl widget::text::IntoFragment<'a>) -> widget::Text<'a> {
     widget::text(text).font(Font {
         weight: font::Weight::Bold,
@@ -90,4 +106,26 @@ pub fn comma_separated(n: u32) -> String {
     }
 
     buf.iter().collect()
+}
+
+pub fn yen(n: u32) -> String {
+    format!("{} [¥]", comma_separated(n))
+}
+
+pub fn get_color(text: &str) -> Color {
+    let mut hasher = DefaultHasher::new();
+
+    for byte in text.bytes() {
+        hasher.write_u8(byte);
+    }
+
+    let value = hasher.finish();
+
+    let f = |x| x as u8 / 3 + 38;
+
+    Color::from_rgb8(f(value >> 16), f(value >> 8), f(value))
+}
+
+pub fn rounded_border() -> Border {
+    border::rounded(2)
 }

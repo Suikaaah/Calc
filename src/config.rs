@@ -1,12 +1,15 @@
 use crate::util;
+use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use time::{Duration, Time};
 
+#[derive(Serialize, Deserialize)]
 pub struct TimeRange {
     pub begin: Time,
     pub end: Time,
 }
 
+#[derive(Serialize, Deserialize)]
 pub enum Type {
     PerTime,
     PerHour(TimeRange),
@@ -18,6 +21,7 @@ pub enum TypeForPickList {
     PerHour,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Config {
     pub r#type: Type,
     pub pay: u32,

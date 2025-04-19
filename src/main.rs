@@ -4,8 +4,8 @@ mod util;
 
 use cell::Cell;
 use config::{Config, TimeRange, Type, TypeForPickList};
-use iced::{Color, Element, Length, alignment, widget};
-use std::collections::BTreeMap;
+use iced::{alignment, widget, Background, Color, Element, Length};
+use std::{collections::BTreeMap, fs};
 use time::{Date, Duration, Month, Time, Weekday};
 
 struct App {
@@ -21,6 +21,7 @@ struct App {
     minute_end_input: String,
     configs: BTreeMap<String, Config>,
     cells: [Cell; Self::CALENDAR_COLUMNS as usize * Self::CALENDAR_ROWS as usize],
+    filename_input: String,
 }
 
 impl Default for App {
@@ -38,6 +39,7 @@ impl Default for App {
             minute_end_input: Default::default(),
             configs: Default::default(),
             cells: std::array::from_fn(|_| Default::default()),
+            filename_input: Default::default(),
         }
     }
 }
@@ -60,6 +62,9 @@ enum Message {
     CellChecked(bool, u8),
     CellButtonPressed(String, u8),
     DeselectPressed,
+    FilenameInput(String),
+    SavePressed,
+    LoadPressed,
 }
 
 impl App {
@@ -71,14 +76,24 @@ impl App {
     const DURATION_WIDTH: u16 = 160;
     const COUNT_WIDTH: u16 = 100;
     const SUM_WIDTH: u16 = 160;
+    const FILENAME_WIDTH: u16 = 160;
     const CHECKBOX_SIZE: u16 = 28;
     const RESULT_SIZE: u16 = 32;
     const SPACING: u16 = 6;
     const PADDING: u16 = 16;
+    const CALENDER_VERTICAL_SPACING: u16 = Self::SPACING * 4;
     const CALENDAR_ROWS: u8 = 6;
     const CALENDAR_COLUMNS: u8 = util::WEEKDAYS.len() as u8;
     const WHITE: Color = Color::from_rgb(1.0, 1.0, 1.0);
     const GRAY: Color = Color::from_rgb(0.7, 0.7, 0.7);
+
+    fn get_cell(&self, i: usize) -> Option<&Cell> {
+        self.cells.get(i)
+    }
+
+    fn get_cell_mut(&mut self, i: usize) -> Option<&mut Cell> {
+        self.cells.get_mut(i)
+    }
 
     fn year(&self) -> Option<i32> {
         self.year_input.parse().ok()
@@ -129,6 +144,7 @@ impl App {
 
         let begin = Time::from_hms(hour_begin, minute_begin, 0).ok()?;
         let end = Time::from_hms(hour_end, minute_end, 0).ok()?;
+
         Some(TimeRange { begin, end })
     }
 
@@ -150,9 +166,26 @@ impl App {
         }
     }
 
+    fn clear_added(&mut self) {
+        for cell in &mut self.cells {
+            cell.clear_added();
+        }
+    }
+
     fn deselect(&mut self) {
         for cell in &mut self.cells {
             cell.deselect();
+        }
+    }
+
+    fn load(&self) -> Option<BTreeMap<String, Config>> {
+        let read = fs::read_to_string(&self.filename_input).ok()?;
+        serde_json::from_str(&read).ok()
+    }
+
+    fn save(&self) {
+        if let Ok(to_write) = serde_json::to_string(&self.configs) {
+            let _ = fs::write(&self.filename_input, to_write);
         }
     }
 
@@ -161,6 +194,10 @@ impl App {
 
         let nth = r * Self::CALENDAR_COLUMNS + c;
 
+        let cell = self
+            .get_cell(nth as usize)
+            .expect("invalid r or c provided");
+
         let date = self
             .first_sunday()
             .and_then(|x| x.checked_add(Duration::days(nth as i64)));
@@ -168,7 +205,7 @@ impl App {
         let active = date.map(|x| self.is_highlighted(&x)).unwrap_or(false);
 
         let chkbox = {
-            let base = checkbox("", self.cells[nth as usize].selected).size(Self::CHECKBOX_SIZE);
+            let base = checkbox("", cell.selected).size(Self::CHECKBOX_SIZE);
 
             if active {
                 base.style(checkbox::primary)
@@ -194,12 +231,23 @@ impl App {
 
         column![
             row![chkbox, text(date_str).color(color).width(Length::Fill)],
-            column(self.cells[nth as usize].config_names.iter().map(|name| {
-                button(name.as_str())
-                    .style(button::danger)
-                    .padding(0)
-                    .on_press(Message::CellButtonPressed(name.to_owned(), nth))
-                    .into()
+            column(cell.config_names.iter().map(|name| {
+                let color = util::get_color(name);
+
+                button(
+                    text(name.as_str())
+                        .width(Length::Fill)
+                        .align_x(alignment::Horizontal::Center),
+                )
+                .style(move |_, _| button::Style {
+                    background: Some(Background::Color(color)),
+                    text_color: Color::WHITE,
+                    border: util::rounded_border(),
+                    ..Default::default()
+                })
+                .padding(0)
+                .on_press(Message::CellButtonPressed(name.to_owned(), nth))
+                .into()
             }))
             .spacing(Self::SPACING)
         ]
@@ -211,6 +259,8 @@ impl App {
 
     fn view(&self) -> Element<Message> {
         use widget::{Space, button, column, pick_list, row, scrollable, text, text_input};
+
+        let space = || Space::new(Self::SPACING, Self::SPACING);
 
         let month_offset_year = row![
             pick_list(util::MONTHS, self.month_selected, Message::MonthSelected),
@@ -247,6 +297,15 @@ impl App {
             _ => None,
         };
 
+        let configs_io = row![
+            text_input("Filename", &self.filename_input)
+                .width(Self::FILENAME_WIDTH)
+                .on_input(Message::FilenameInput),
+            button("Load").on_press(Message::LoadPressed),
+            button("Save").on_press(Message::SavePressed),
+        ]
+        .spacing(Self::SPACING);
+
         let configs_input = row![
             text_input("Name", &self.name_input)
                 .width(Self::NAME_WIDTH)
@@ -267,27 +326,27 @@ impl App {
         let configs_top = if self.configs.is_empty() {
             None
         } else {
+            let top = |name, width| {
+                util::rounded_container(name)
+                    .width(width)
+                    .align_x(alignment::Horizontal::Center)
+            };
+
             Some(
                 row![
-                    util::rounded_container("Name")
-                        .width(Self::NAME_WIDTH)
-                        .align_x(alignment::Horizontal::Center),
-                    util::rounded_container("Pay")
-                        .width(Self::PAY_WIDTH)
-                        .align_x(alignment::Horizontal::Center),
-                    util::rounded_container("Duration")
-                        .width(Self::DURATION_WIDTH)
-                        .align_x(alignment::Horizontal::Center),
-                    util::rounded_container("Count")
-                        .width(Self::COUNT_WIDTH)
-                        .align_x(alignment::Horizontal::Center),
-                    util::rounded_container("Sum")
-                        .width(Self::SUM_WIDTH)
-                        .align_x(alignment::Horizontal::Center),
+                    top("Name", Self::NAME_WIDTH),
+                    top("Pay", Self::PAY_WIDTH),
+                    top("Duration", Self::DURATION_WIDTH),
+                    top("Count", Self::COUNT_WIDTH),
+                    top("Sum", Self::SUM_WIDTH),
                 ]
                 .spacing(Self::SPACING),
             )
         };
+
+        let configs_input_and_top = column![configs_input]
+            .push_maybe(configs_top)
+            .spacing(Self::SPACING);
 
         let mut sum = 0;
 
@@ -300,8 +359,15 @@ impl App {
 
             sum += config.sum(count);
 
+            let color = util::get_color(name);
+
             row![
-                text(name).width(Self::NAME_WIDTH),
+                util::rounded_container_colored(
+                    text(name)
+                        .width(Self::NAME_WIDTH)
+                        .align_x(alignment::Horizontal::Center),
+                    color
+                ),
                 util::monospace_text(config.pay_to_string())
                     .width(Self::PAY_WIDTH)
                     .align_x(alignment::Horizontal::Right),
@@ -311,17 +377,19 @@ impl App {
                 util::monospace_text(util::comma_separated(count as u32))
                     .width(Self::COUNT_WIDTH)
                     .align_x(alignment::Horizontal::Right),
-                util::monospace_text(format!("{} [¥]", util::comma_separated(config.sum(count))))
+                util::monospace_text(util::yen(config.sum(count)))
                     .width(Self::SUM_WIDTH)
                     .align_x(alignment::Horizontal::Right),
                 button("Remove").on_press(Message::RemovePressed(name.to_string())),
-                button("Add to Selection").on_press(Message::AddPressed(name.to_string())),
+                button("Add").on_press(Message::AddPressed(name.to_string())),
             ]
             .align_y(alignment::Vertical::Center)
             .spacing(Self::SPACING)
             .into()
         }))
         .spacing(Self::SPACING);
+
+        let result_body = util::monospace_text(util::yen(sum)).size(Self::RESULT_SIZE);
 
         let calendar_top = row(util::WEEKDAYS.map(|weekday| {
             util::rounded_container(text(util::short_weekday(&weekday).to_string()))
@@ -336,25 +404,28 @@ impl App {
                 .spacing(Self::SPACING)
                 .into()
         }))
-        .spacing(Self::SPACING * 3);
+        .spacing(Self::CALENDER_VERTICAL_SPACING);
 
         scrollable(
             column![
                 util::bold_text("Date"),
                 month_offset_year,
-                Space::new(Self::SPACING, Self::SPACING),
+                space(),
                 util::bold_text("Configurations"),
-                column![configs_input]
-                    .push_maybe(configs_top)
-                    .spacing(Self::SPACING),
+                configs_io,
+                configs_input_and_top,
                 configs_body,
-                Space::new(Self::SPACING, Self::SPACING),
+                space(),
                 util::bold_text("Result"),
-                util::monospace_text(format!("{} [¥]", util::comma_separated(sum)))
-                    .size(Self::RESULT_SIZE),
-                Space::new(Self::SPACING, Self::SPACING),
+                result_body,
+                space(),
                 util::bold_text("Calendar"),
-                button("Deselect All").on_press(Message::DeselectPressed),
+                button(
+                    text("Deselect All")
+                        .width(Length::Fill)
+                        .align_x(alignment::Horizontal::Center)
+                )
+                .on_press(Message::DeselectPressed),
                 calendar_top,
                 calendar_body,
             ]
@@ -401,9 +472,26 @@ impl App {
                 .iter_mut()
                 .filter(|x| x.selected)
                 .for_each(|x| x.insert(name.clone())),
-            Message::CellChecked(b, i) => self.cells[i as usize].selected = b,
-            Message::CellButtonPressed(name, i) => self.cells[i as usize].remove(&name),
+            Message::CellChecked(b, i) => {
+                self.get_cell_mut(i as usize)
+                    .expect("invalid i provided")
+                    .selected = b
+            }
+            Message::CellButtonPressed(name, i) => self
+                .get_cell_mut(i as usize)
+                .expect("invalid i provided")
+                .remove(&name),
             Message::DeselectPressed => self.deselect(),
+            Message::FilenameInput(filename) => self.filename_input = filename,
+            Message::LoadPressed => {
+                self.clear_added();
+                if let Some(configs) = self.load() {
+                    self.configs = configs;
+                }
+            }
+            Message::SavePressed => {
+                self.save();
+            }
         }
     }
 }

@@ -9,7 +9,7 @@ pub struct Cell {
 impl Cell {
     pub fn clear(&mut self) {
         self.deselect();
-        self.config_names.clear();
+        self.clear_added();
     }
 
     pub fn contains(&self, name: &str) -> bool {
@@ -18,6 +18,10 @@ impl Cell {
 
     pub fn deselect(&mut self) {
         self.selected = false;
+    }
+
+    pub fn clear_added(&mut self) {
+        self.config_names.clear();
     }
 
     pub fn insert(&mut self, name: String) {
