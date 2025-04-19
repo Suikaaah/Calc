@@ -3,7 +3,7 @@ use std::{
     hash::{DefaultHasher, Hasher},
 };
 
-use iced::{border, font, widget, Background, Border, Color, Element, Font};
+use iced::{Background, Border, Color, Element, Font, border, font, widget};
 use time::{Month, Weekday};
 
 pub const MONTHS: [Month; 12] = [

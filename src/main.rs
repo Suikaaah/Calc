@@ -1,10 +1,12 @@
+#![windows_subsystem = "windows"]
+
 mod cell;
 mod config;
 mod util;
 
 use cell::Cell;
 use config::{Config, TimeRange, Type, TypeForPickList};
-use iced::{alignment, widget, Background, Color, Element, Length};
+use iced::{Background, Color, Element, Length, alignment, widget};
 use std::{collections::BTreeMap, fs};
 use time::{Date, Duration, Month, Time, Weekday};
 
@@ -68,15 +70,15 @@ enum Message {
 }
 
 impl App {
-    const OFFSET_WIDTH: u16 = 100;
-    const YEAR_WIDTH: u16 = 100;
-    const NAME_WIDTH: u16 = 160;
+    const OFFSET_WIDTH: u16 = 80;
+    const YEAR_WIDTH: u16 = 80;
+    const NAME_WIDTH: u16 = 180;
     const PAY_WIDTH: u16 = 160;
     const TIME_WIDTH: u16 = 50;
-    const DURATION_WIDTH: u16 = 160;
-    const COUNT_WIDTH: u16 = 100;
+    const DURATION_WIDTH: u16 = 140;
+    const COUNT_WIDTH: u16 = 60;
     const SUM_WIDTH: u16 = 160;
-    const FILENAME_WIDTH: u16 = 160;
+    const FILENAME_WIDTH: u16 = 180;
     const CHECKBOX_SIZE: u16 = 28;
     const RESULT_SIZE: u16 = 32;
     const SPACING: u16 = 6;
@@ -279,19 +281,20 @@ impl App {
                     text_input("", &self.hour_begin_input)
                         .width(Self::TIME_WIDTH)
                         .on_input(Message::HourBeginInput),
-                    text(":"),
+                    util::monospace_text(":"),
                     text_input("", &self.minute_begin_input)
                         .width(Self::TIME_WIDTH)
                         .on_input(Message::MinuteBeginInput),
-                    text("-"),
+                    util::monospace_text("-"),
                     text_input("", &self.hour_end_input)
                         .width(Self::TIME_WIDTH)
                         .on_input(Message::HourEndInput),
-                    text(":"),
+                    util::monospace_text(":"),
                     text_input("", &self.minute_end_input)
                         .width(Self::TIME_WIDTH)
                         .on_input(Message::MinuteEndInput),
                 ]
+                .align_y(alignment::Vertical::Center)
                 .spacing(Self::SPACING),
             ),
             _ => None,
@@ -408,13 +411,13 @@ impl App {
 
         scrollable(
             column![
-                util::bold_text("Date"),
-                month_offset_year,
-                space(),
                 util::bold_text("Configurations"),
                 configs_io,
                 configs_input_and_top,
                 configs_body,
+                space(),
+                util::bold_text("Date"),
+                month_offset_year,
                 space(),
                 util::bold_text("Result"),
                 result_body,
