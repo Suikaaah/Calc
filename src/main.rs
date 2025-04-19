@@ -73,11 +73,11 @@ impl App {
     const OFFSET_WIDTH: u16 = 80;
     const YEAR_WIDTH: u16 = 80;
     const NAME_WIDTH: u16 = 180;
-    const PAY_WIDTH: u16 = 160;
+    const PAY_WIDTH: u16 = 140;
     const TIME_WIDTH: u16 = 50;
-    const DURATION_WIDTH: u16 = 140;
+    const DURATION_WIDTH: u16 = 130;
     const COUNT_WIDTH: u16 = 60;
-    const SUM_WIDTH: u16 = 160;
+    const SUM_WIDTH: u16 = 140;
     const FILENAME_WIDTH: u16 = 180;
     const CHECKBOX_SIZE: u16 = 28;
     const RESULT_SIZE: u16 = 32;
@@ -409,32 +409,40 @@ impl App {
         }))
         .spacing(Self::CALENDER_VERTICAL_SPACING);
 
-        scrollable(
-            column![
-                util::bold_text("Configurations"),
-                configs_io,
-                configs_input_and_top,
-                configs_body,
-                space(),
-                util::bold_text("Date"),
-                month_offset_year,
-                space(),
-                util::bold_text("Result"),
-                result_body,
-                space(),
-                util::bold_text("Calendar"),
-                button(
-                    text("Deselect All")
-                        .width(Length::Fill)
-                        .align_x(alignment::Horizontal::Center)
-                )
-                .on_press(Message::DeselectPressed),
-                calendar_top,
-                calendar_body,
-            ]
-            .spacing(Self::SPACING)
-            .padding(Self::PADDING),
-        )
+        row![
+            scrollable(
+                column![
+                    util::bold_text("Configurations"),
+                    configs_io,
+                    configs_input_and_top,
+                    configs_body,
+                    space(),
+                    util::bold_text("Result"),
+                    result_body,
+                ]
+                .padding(Self::PADDING)
+                .spacing(Self::SPACING)
+            ),
+            scrollable(
+                column![
+                    util::bold_text("Date"),
+                    month_offset_year,
+                    space(),
+                    util::bold_text("Calendar"),
+                    button(
+                        text("Deselect All")
+                            .width(Length::Fill)
+                            .align_x(alignment::Horizontal::Center)
+                    )
+                    .on_press(Message::DeselectPressed),
+                    calendar_top,
+                    calendar_body,
+                ]
+                .padding(Self::PADDING)
+                .spacing(Self::SPACING)
+            ),
+        ]
+        .spacing(Self::SPACING)
         .into()
     }
 
