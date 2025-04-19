@@ -6,7 +6,7 @@ mod util;
 
 use cell::Cell;
 use config::{Config, TimeRange, Type, TypeForPickList};
-use iced::{Color, Element, Length, Size, alignment, widget};
+use iced::{Color, Element, Length, Size, Theme, alignment, theme, widget};
 use std::{collections::BTreeMap, fs};
 use time::{Date, Duration, Month, Time, Weekday};
 
@@ -86,8 +86,6 @@ impl App {
     const CALENDER_VERTICAL_SPACING: u16 = Self::SPACING * 4;
     const CALENDAR_ROWS: u8 = 6;
     const CALENDAR_COLUMNS: u8 = util::WEEKDAYS.len() as u8;
-    const WHITE: Color = Color::from_rgb(1.0, 1.0, 1.0);
-    const GRAY: Color = Color::from_rgb(0.7, 0.7, 0.7);
 
     fn get_cell(&self, i: usize) -> Option<&Cell> {
         self.cells.get(i)
@@ -210,14 +208,11 @@ impl App {
             let base = checkbox("", cell.selected).size(Self::CHECKBOX_SIZE);
 
             if active {
-                base.style(checkbox::primary)
-                    .on_toggle(move |b| Message::CellChecked(b, nth))
+                base.on_toggle(move |b| Message::CellChecked(b, nth))
             } else {
                 base.style(checkbox::secondary)
             }
         };
-
-        let color = if active { Self::WHITE } else { Self::GRAY };
 
         let show_month = date.map(|x| x.day() == 1 || nth == 0).unwrap_or(false);
 
@@ -231,8 +226,14 @@ impl App {
             })
             .unwrap_or_else(|| "N/A".to_string());
 
+        let date_text = text(date_str).width(Length::Fill).style(if active {
+            text::base
+        } else {
+            text::secondary
+        });
+
         column![
-            row![chkbox, text(date_str).color(color).width(Length::Fill)],
+            row![chkbox, date_text],
             column(cell.config_names.iter().map(|name| {
                 util::colored_thin_button(
                     text(name.as_str())
@@ -507,7 +508,16 @@ fn main() -> iced::Result {
         height: 800.0,
     };
 
+    let palette = theme::Palette {
+        background: Color::from_rgb8(31, 31, 31),
+        text: Color::from_rgb8(0xFF, 0xFF, 0xFF),
+        primary: Color::from_rgb8(0, 0x3F, 0x7F),
+        danger: Color::from_rgb8(0xFF, 0, 0),
+        success: Color::from_rgb8(0, 0xFF, 0),
+    };
+
     iced::application("Calc", App::update, App::view)
+        .theme(move |_| Theme::custom("Custom".to_string(), palette))
         .window_size(WINDOW_SIZE)
         .run()
 }
