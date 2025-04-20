@@ -539,7 +539,7 @@ impl App {
                 }
             }
             Message::SavePressed => match self.save() {
-                Ok(()) => (),
+                Ok(()) => self.set_title("Configurations saved"),
                 Err(failure) => self.set_failure(failure),
             },
         }
