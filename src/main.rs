@@ -2,10 +2,12 @@
 
 mod cell;
 mod config;
+mod failure;
 mod util;
 
 use cell::Cell;
 use config::{Config, TimeRange, Type, TypeForPickList};
+use failure::Failure;
 use iced::{Color, Element, Length, Size, Theme, alignment, theme, widget};
 use std::{collections::BTreeMap, fs};
 use time::{Date, Duration, Month, Time, Weekday};
@@ -24,6 +26,7 @@ struct App {
     configs: BTreeMap<String, Config>,
     cells: [Cell; Self::CALENDAR_COLUMNS as usize * Self::CALENDAR_ROWS as usize],
     filename_input: String,
+    title: String,
 }
 
 impl Default for App {
@@ -42,6 +45,7 @@ impl Default for App {
             configs: Default::default(),
             cells: std::array::from_fn(|_| Default::default()),
             filename_input: Default::default(),
+            title: "Calc".to_string(),
         }
     }
 }
@@ -87,48 +91,70 @@ impl App {
     const CALENDAR_ROWS: u8 = 6;
     const CALENDAR_COLUMNS: u8 = util::WEEKDAYS.len() as u8;
 
-    fn get_cell(&self, i: usize) -> Option<&Cell> {
-        self.cells.get(i)
+    fn reset_title(&mut self) {
+        self.title = "Calc".to_string();
     }
 
-    fn get_cell_mut(&mut self, i: usize) -> Option<&mut Cell> {
-        self.cells.get_mut(i)
+    fn set_title(&mut self, title: &str) {
+        self.title = format!("Calc - {}", title)
     }
 
-    fn year(&self) -> Option<i32> {
-        self.year_input.parse().ok()
+    fn set_failure(&mut self, failure: Failure) {
+        self.set_title(failure.to_string().as_ref())
     }
 
-    fn offset(&self) -> Option<u8> {
-        self.offset_input.parse().ok()
+    fn get_cell(&self, i: usize) -> Result<&Cell, Failure> {
+        self.cells.get(i).ok_or(Failure::Cell(i))
     }
 
-    fn date(&self) -> Option<Date> {
-        Date::from_calendar_date(self.year()?, self.month_selected?, self.offset()?).ok()
+    fn get_cell_mut(&mut self, i: usize) -> Result<&mut Cell, Failure> {
+        self.cells.get_mut(i).ok_or(Failure::Cell(i))
     }
 
-    fn pay(&self) -> Option<u32> {
-        self.pay_input.parse().ok()
+    fn year(&self) -> Result<i32, Failure> {
+        self.year_input.parse().map_err(|_| Failure::Year)
     }
 
-    fn first_sunday(&self) -> Option<Date> {
+    fn offset(&self) -> Result<u8, Failure> {
+        self.offset_input.parse().map_err(|_| Failure::Offset)
+    }
+
+    fn month(&self) -> Month {
+        self.month_selected.expect("unreachable")
+    }
+
+    fn r#type(&self) -> TypeForPickList {
+        self.type_selected.expect("unreachable")
+    }
+
+    fn date(&self) -> Result<Date, Failure> {
+        Date::from_calendar_date(self.year()?, self.month(), self.offset()?)
+            .map_err(|_| Failure::Date)
+    }
+
+    fn pay(&self) -> Result<u32, Failure> {
+        self.pay_input.parse().map_err(|_| Failure::Pay)
+    }
+
+    fn first_sunday(&self) -> Result<Date, Failure> {
         self.date().map(|x| match x.weekday() {
             Weekday::Sunday => x,
             _ => x.prev_occurrence(Weekday::Sunday),
         })
     }
 
-    fn highlight_begin(&self) -> Option<Date> {
+    fn highlight_begin(&self) -> Result<Date, Failure> {
         self.date()
     }
 
-    fn highlight_end(&self) -> Option<Date> {
-        match self.month_selected? {
+    fn highlight_end(&self) -> Result<Date, Failure> {
+        match self.month() {
             Month::December => {
-                Date::from_calendar_date(self.year()? + 1, Month::January, self.offset()?).ok()
+                Date::from_calendar_date(self.year()? + 1, Month::January, self.offset()?)
             }
-            month => Date::from_calendar_date(self.year()?, month.next(), self.offset()?).ok(),
+            month => Date::from_calendar_date(self.year()?, month.next(), self.offset()?),
         }
+        .map_err(|_| Failure::Date)
     }
 
     fn is_highlighted(&self, date: &Date) -> bool {
@@ -136,27 +162,37 @@ impl App {
             && self.highlight_end().map(|x| date < &x).unwrap_or(false)
     }
 
-    fn time_range(&self) -> Option<TimeRange> {
-        let hour_begin = self.hour_begin_input.parse().ok()?;
-        let minute_begin = self.minute_begin_input.parse().ok()?;
-        let hour_end = self.hour_end_input.parse().ok()?;
-        let minute_end = self.minute_end_input.parse().ok()?;
+    fn time_range(&self) -> Result<TimeRange, Failure> {
+        let hour_begin = self
+            .hour_begin_input
+            .parse()
+            .map_err(|_| Failure::DurationParse)?;
+        let minute_begin = self
+            .minute_begin_input
+            .parse()
+            .map_err(|_| Failure::DurationParse)?;
+        let hour_end = self
+            .hour_end_input
+            .parse()
+            .map_err(|_| Failure::DurationParse)?;
+        let minute_end = self
+            .minute_end_input
+            .parse()
+            .map_err(|_| Failure::DurationParse)?;
 
-        let begin = Time::from_hms(hour_begin, minute_begin, 0).ok()?;
-        let end = Time::from_hms(hour_end, minute_end, 0).ok()?;
+        let begin = Time::from_hms(hour_begin, minute_begin, 0).map_err(|_| Failure::Duration)?;
+        let end = Time::from_hms(hour_end, minute_end, 0).map_err(|_| Failure::Duration)?;
 
-        Some(TimeRange { begin, end })
+        Ok(TimeRange { begin, end })
     }
 
-    fn config(&self) -> Option<Config> {
-        let r#type = match self.type_selected.as_ref()? {
-            TypeForPickList::PerTime => Type::PerTime,
-            TypeForPickList::PerHour => Type::PerHour(self.time_range()?),
-        };
-
-        Some(Config {
-            r#type,
+    fn config(&self) -> Result<Config, Failure> {
+        Ok(Config {
             pay: self.pay()?,
+            r#type: match self.r#type() {
+                TypeForPickList::PerTime => Type::PerTime,
+                TypeForPickList::PerHour => Type::PerHour(self.time_range()?),
+            },
         })
     }
 
@@ -178,14 +214,15 @@ impl App {
         }
     }
 
-    fn load(&self) -> Option<BTreeMap<String, Config>> {
-        let read = fs::read_to_string(&self.filename_input).ok()?;
-        serde_json::from_str(&read).ok()
+    fn load(&self) -> Result<BTreeMap<String, Config>, Failure> {
+        let read = fs::read_to_string(&self.filename_input).map_err(|_| Failure::Load)?;
+        serde_json::from_str(&read).map_err(|_| Failure::Load)
     }
 
-    fn save(&self) {
-        if let Ok(to_write) = serde_json::to_string(&self.configs) {
-            let _ = fs::write(&self.filename_input, to_write);
+    fn save(&self) -> Result<(), Failure> {
+        match serde_json::to_string(&self.configs) {
+            Ok(to_write) => fs::write(&self.filename_input, to_write).map_err(|_| Failure::Save),
+            Err(_) => Err(Failure::Save),
         }
     }
 
@@ -194,13 +231,12 @@ impl App {
 
         let nth = r * Self::CALENDAR_COLUMNS + c;
 
-        let cell = self
-            .get_cell(nth as usize)
-            .expect("invalid r or c provided");
+        let cell = self.get_cell(nth as usize).expect("unreachable");
 
-        let date = self
-            .first_sunday()
-            .and_then(|x| x.checked_add(Duration::days(nth as i64)));
+        let date = self.first_sunday().and_then(|x| {
+            x.checked_add(Duration::days(nth as i64))
+                .ok_or(Failure::Date)
+        });
 
         let active = date.map(|x| self.is_highlighted(&x)).unwrap_or(false);
 
@@ -224,7 +260,7 @@ impl App {
                     x.day().to_string()
                 }
             })
-            .unwrap_or_else(|| "N/A".to_string());
+            .unwrap_or_else(|_| "N/A".to_string());
 
         let date_text = text(date_str).width(Length::Fill).style(if active {
             text::base
@@ -251,6 +287,10 @@ impl App {
         .padding(Self::SPACING)
         .width(Length::Fill)
         .into()
+    }
+
+    fn title(&self) -> String {
+        self.title.clone()
     }
 
     fn view(&self) -> Element<Message> {
@@ -312,7 +352,7 @@ impl App {
                 .on_input(Message::PayInput),
             pick_list(
                 config::TYPES_FOR_PICK_LIST,
-                self.type_selected.clone(),
+                self.type_selected,
                 Message::TypeSelected
             ),
         ]
@@ -442,6 +482,8 @@ impl App {
     }
 
     fn update(&mut self, message: Message) {
+        self.reset_title();
+
         match message {
             Message::MonthSelected(month) => {
                 self.clear_cells();
@@ -458,11 +500,12 @@ impl App {
             Message::NameInput(name) => self.name_input = name,
             Message::TypeSelected(r#type) => self.type_selected = Some(r#type),
             Message::PayInput(pay) => self.pay_input = pay,
-            Message::PushPressed => {
-                if let Some(config) = self.config() {
+            Message::PushPressed => match self.config() {
+                Ok(config) => {
                     self.configs.insert(self.name_input.clone(), config);
                 }
-            }
+                Err(failure) => self.set_failure(failure),
+            },
             Message::RemovePressed(name) => {
                 self.configs.remove(&name);
                 for cell in &mut self.cells {
@@ -478,26 +521,27 @@ impl App {
                 .iter_mut()
                 .filter(|x| x.selected)
                 .for_each(|x| x.insert(name.clone())),
-            Message::CellChecked(b, i) => {
-                self.get_cell_mut(i as usize)
-                    .expect("invalid i provided")
-                    .selected = b
-            }
-            Message::CellButtonPressed(name, i) => self
-                .get_cell_mut(i as usize)
-                .expect("invalid i provided")
-                .remove(&name),
+            Message::CellChecked(b, i) => match self.get_cell_mut(i as usize) {
+                Ok(cell) => cell.selected = b,
+                Err(failure) => self.set_failure(failure),
+            },
+            Message::CellButtonPressed(name, i) => match self.get_cell_mut(i as usize) {
+                Ok(cell) => cell.remove(&name),
+                Err(failure) => self.set_failure(failure),
+            },
             Message::DeselectPressed => self.deselect(),
             Message::FilenameInput(filename) => self.filename_input = filename,
             Message::LoadPressed => {
                 self.clear_added();
-                if let Some(configs) = self.load() {
-                    self.configs = configs;
+                match self.load() {
+                    Ok(configs) => self.configs = configs,
+                    Err(failure) => self.set_failure(failure),
                 }
             }
-            Message::SavePressed => {
-                self.save();
-            }
+            Message::SavePressed => match self.save() {
+                Ok(()) => (),
+                Err(failure) => self.set_failure(failure),
+            },
         }
     }
 }
@@ -516,7 +560,7 @@ fn main() -> iced::Result {
         success: Color::from_rgb8(0, 0xFF, 0),
     };
 
-    iced::application("Calc", App::update, App::view)
+    iced::application(App::title, App::update, App::view)
         .theme(move |_| Theme::custom("Custom".to_string(), palette))
         .window_size(WINDOW_SIZE)
         .run()

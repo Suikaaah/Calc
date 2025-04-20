@@ -1,4 +1,4 @@
-use iced::{Background, Border, Color, Element, Font, border, font, widget};
+use iced::{Background, Border, Color, Element, Font, Theme, border, font, theme, widget};
 use std::{
     collections::VecDeque,
     hash::{DefaultHasher, Hasher},
@@ -85,13 +85,57 @@ pub fn colored_thin_button<'a, Message>(
     content: impl Into<Element<'a, Message>>,
     color: Color,
 ) -> widget::Button<'a, Message> {
-    use widget::button;
+    use widget::{
+        button,
+        button::{Status, Style},
+    };
 
-    button(content).style(move |_, _| button::Style {
-        background: Some(Background::Color(color)),
-        text_color: Color::WHITE,
-        border: rounded_border(),
-        ..Default::default()
+    // copied from source
+    fn styled(pair: theme::palette::Pair) -> Style {
+        Style {
+            background: Some(Background::Color(pair.color)),
+            text_color: pair.text,
+            border: rounded_border(),
+            ..Style::default()
+        }
+    }
+
+    // copied from source
+    fn disabled(style: Style) -> Style {
+        Style {
+            background: style
+                .background
+                .map(|background| background.scale_alpha(0.5)),
+            text_color: style.text_color.scale_alpha(0.5),
+            ..style
+        }
+    }
+
+    button(content).style(move |_, status| {
+        let theme = Theme::custom(
+            "Button".to_string(),
+            theme::Palette {
+                primary: color,
+                text: Color::from_rgb8(0xFF, 0xFF, 0xFF),
+
+                // these three don't matter
+                danger: Default::default(),
+                success: Default::default(),
+                background: Default::default(),
+            },
+        );
+
+        let palette = theme.extended_palette();
+        let base = styled(palette.primary.base);
+
+        match status {
+            Status::Active | Status::Pressed => base,
+            Status::Hovered => Style {
+                background: Some(Background::Color(palette.primary.strong.color)),
+                ..base
+            },
+            Status::Disabled => disabled(base),
+        }
     })
 }
 

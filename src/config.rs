@@ -15,7 +15,7 @@ pub enum Type {
     PerHour(TimeRange),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TypeForPickList {
     PerTime,
     PerHour,
