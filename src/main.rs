@@ -26,6 +26,7 @@ struct App {
     configs: BTreeMap<String, Config>,
     cells: [Cell; Self::CALENDAR_COLUMNS as usize * Self::CALENDAR_ROWS as usize],
     filename_input: String,
+    filename_selected: Option<String>,
     title: String,
 }
 
@@ -45,6 +46,7 @@ impl Default for App {
             configs: Default::default(),
             cells: std::array::from_fn(|_| Default::default()),
             filename_input: Default::default(),
+            filename_selected: Default::default(),
             title: "Calc".to_string(),
         }
     }
@@ -60,6 +62,7 @@ enum Message {
     PayInput(String),
     PushPressed,
     RemovePressed(String),
+    RemoveFilePressed,
     HourBeginInput(String),
     MinuteBeginInput(String),
     HourEndInput(String),
@@ -69,8 +72,10 @@ enum Message {
     CellButtonPressed(String, u8),
     DeselectPressed,
     FilenameInput(String),
+    FilenameSelected(String),
     SavePressed,
     LoadPressed,
+    WeekdayPressed(Weekday),
 }
 
 impl App {
@@ -120,11 +125,13 @@ impl App {
     }
 
     fn month(&self) -> Month {
-        self.month_selected.expect("unreachable")
+        self.month_selected
+            .expect("unreachable because something is always selected")
     }
 
     fn r#type(&self) -> TypeForPickList {
-        self.type_selected.expect("unreachable")
+        self.type_selected
+            .expect("unreachable because something is always selected")
     }
 
     fn date(&self) -> Result<Date, Failure> {
@@ -215,29 +222,59 @@ impl App {
     }
 
     fn load(&self) -> Result<BTreeMap<String, Config>, Failure> {
-        let read = fs::read_to_string(&self.filename_input).map_err(|_| Failure::Load)?;
+        let filename = self.filename_selected.as_ref().ok_or(Failure::Load)?;
+        let read = fs::read_to_string(format!("{}.json", filename)).map_err(|_| Failure::Load)?;
         serde_json::from_str(&read).map_err(|_| Failure::Load)
     }
 
     fn save(&self) -> Result<(), Failure> {
+        if self.filename_input.is_empty() {
+            return Err(Failure::SaveEmptyName);
+        }
+
         match serde_json::to_string(&self.configs) {
-            Ok(to_write) => fs::write(&self.filename_input, to_write).map_err(|_| Failure::Save),
+            Ok(to_write) => fs::write(format!("{}.json", self.filename_input), to_write)
+                .map_err(|_| Failure::Save),
             Err(_) => Err(Failure::Save),
         }
+    }
+
+    fn cell_date(&self, i: usize) -> Result<Date, Failure> {
+        self.first_sunday()
+            .and_then(|x| x.checked_add(Duration::days(i as i64)).ok_or(Failure::Date))
+    }
+
+    fn find_jsons(&self) -> Result<Vec<String>, Failure> {
+        let dir = fs::read_dir("./").map_err(|_| Failure::Load)?;
+
+        let mut retval = Vec::new();
+
+        for entry in dir {
+            let path = entry.map_err(|_| Failure::Load)?.path();
+
+            if let Some("json") = path.extension().and_then(|x| x.to_str()) {
+                if let Some(filename) = path.file_stem().and_then(|x| x.to_str()) {
+                    retval.push(filename.to_string())
+                }
+            }
+        }
+
+        Ok(retval)
+    }
+
+    fn remove_file(&self) -> Result<(), Failure> {
+        let filename = self.filename_selected.as_ref().ok_or(Failure::FileRemove)?;
+        fs::remove_file(format!("{filename}.json")).map_err(|_| Failure::FileRemove)
     }
 
     fn calendar_cell(&self, r: u8, c: u8) -> Element<Message> {
         use widget::{checkbox, column, row, text};
 
         let nth = r * Self::CALENDAR_COLUMNS + c;
-
-        let cell = self.get_cell(nth as usize).expect("unreachable");
-
-        let date = self.first_sunday().and_then(|x| {
-            x.checked_add(Duration::days(nth as i64))
-                .ok_or(Failure::Date)
-        });
-
+        let cell = self
+            .get_cell(nth as usize)
+            .expect("supposed to be unreachable");
+        let date = self.cell_date(nth as usize);
         let active = date.map(|x| self.is_highlighted(&x)).unwrap_or(false);
 
         let chkbox = {
@@ -271,7 +308,7 @@ impl App {
         column![
             row![chkbox, date_text],
             column(cell.config_names.iter().map(|name| {
-                util::colored_thin_button(
+                util::colored_button(
                     text(name.as_str())
                         .width(Length::Fill)
                         .align_x(alignment::Horizontal::Center),
@@ -338,8 +375,14 @@ impl App {
             text_input("Filename", &self.filename_input)
                 .width(Length::Fill)
                 .on_input(Message::FilenameInput),
-            button("Load").on_press(Message::LoadPressed),
             button("Save").on_press(Message::SavePressed),
+            pick_list(
+                self.find_jsons().unwrap_or_default(),
+                self.filename_selected.as_ref(),
+                Message::FilenameSelected
+            ),
+            button("Load").on_press(Message::LoadPressed),
+            button("Delete").on_press(Message::RemoveFilePressed),
         ]
         .spacing(Self::SPACING);
 
@@ -397,7 +440,7 @@ impl App {
             sum += config.sum(count);
 
             row![
-                util::colored_thin_button(
+                util::colored_button(
                     text(name)
                         .width(Length::Fill)
                         .align_x(alignment::Horizontal::Center),
@@ -429,10 +472,15 @@ impl App {
         let result_body = util::monospace_text(util::yen(sum)).size(Self::RESULT_SIZE);
 
         let calendar_top = row(util::WEEKDAYS.map(|weekday| {
-            util::rounded_container(text(util::short_weekday(&weekday).to_string()))
-                .align_x(alignment::Horizontal::Center)
-                .width(Length::Fill)
-                .into()
+            util::colored_button(
+                text(util::short_weekday(&weekday).to_string())
+                    .width(Length::Fill)
+                    .align_x(alignment::Horizontal::Center),
+                Color::from_rgb8(0x70, 0x70, 0x70),
+            )
+            .padding(0)
+            .on_press(Message::WeekdayPressed(weekday))
+            .into()
         }))
         .spacing(Self::SPACING);
 
@@ -512,6 +560,13 @@ impl App {
                     cell.remove(&name);
                 }
             }
+            Message::RemoveFilePressed => {
+                if let Err(failure) = self.remove_file() {
+                    self.set_failure(failure);
+                }
+
+                self.filename_selected = None;
+            }
             Message::HourBeginInput(x) => self.hour_begin_input = x,
             Message::MinuteBeginInput(x) => self.minute_begin_input = x,
             Message::HourEndInput(x) => self.hour_end_input = x,
@@ -531,17 +586,31 @@ impl App {
             },
             Message::DeselectPressed => self.deselect(),
             Message::FilenameInput(filename) => self.filename_input = filename,
-            Message::LoadPressed => {
-                self.clear_added();
-                match self.load() {
-                    Ok(configs) => self.configs = configs,
-                    Err(failure) => self.set_failure(failure),
+            Message::FilenameSelected(filename) => self.filename_selected = Some(filename),
+            Message::LoadPressed => match self.load() {
+                Ok(configs) => {
+                    self.clear_added();
+                    self.configs = configs;
                 }
-            }
+                Err(failure) => self.set_failure(failure),
+            },
             Message::SavePressed => match self.save() {
                 Ok(()) => self.set_title("Configurations saved"),
                 Err(failure) => self.set_failure(failure),
             },
+            Message::WeekdayPressed(weekday) => {
+                for i in 0..self.cells.len() {
+                    let highlighted = self
+                        .cell_date(i)
+                        .map(|date| self.is_highlighted(&date))
+                        .unwrap_or(false);
+                    let column = i as u8 % Self::CALENDAR_COLUMNS;
+                    let select = highlighted && (column == util::weekday_to_column(weekday));
+                    if select {
+                        self.get_cell_mut(i).expect("unreachable").select();
+                    }
+                }
+            }
         }
     }
 }

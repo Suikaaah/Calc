@@ -81,7 +81,7 @@ pub fn monospace_text<'a>(text: impl widget::text::IntoFragment<'a>) -> widget::
     })
 }
 
-pub fn colored_thin_button<'a, Message>(
+pub fn colored_button<'a, Message>(
     content: impl Into<Element<'a, Message>>,
     color: Color,
 ) -> widget::Button<'a, Message> {
@@ -172,4 +172,16 @@ pub fn get_color(text: &str) -> Color {
 
 pub fn rounded_border() -> Border {
     border::rounded(2)
+}
+
+pub const fn weekday_to_column(weekday: Weekday) -> u8 {
+    match weekday {
+        Weekday::Sunday => 0,
+        Weekday::Monday => 1,
+        Weekday::Tuesday => 2,
+        Weekday::Wednesday => 3,
+        Weekday::Thursday => 4,
+        Weekday::Friday => 5,
+        Weekday::Saturday => 6,
+    }
 }

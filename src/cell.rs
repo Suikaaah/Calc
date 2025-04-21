@@ -20,6 +20,10 @@ impl Cell {
         self.selected = false;
     }
 
+    pub fn select(&mut self) {
+        self.selected = true;
+    }
+
     pub fn clear_added(&mut self) {
         self.config_names.clear();
     }
