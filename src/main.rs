@@ -176,8 +176,10 @@ impl App {
         let hour_end = parse_map(&self.hour_end_input)?;
         let minute_end = parse_map(&self.minute_end_input)?;
 
-        let begin = Time::from_hms(hour_begin, minute_begin, 0).map_err(|_| Failure::Duration)?;
-        let end = Time::from_hms(hour_end, minute_end, 0).map_err(|_| Failure::Duration)?;
+        let time_map = |hour, minute| Time::from_hms(hour, minute, 0).map_err(|_| Failure::Duration);
+
+        let begin = time_map(hour_begin, minute_begin)?;
+        let end = time_map(hour_end, minute_end)?;
 
         Ok(TimeRange { begin, end })
     }
