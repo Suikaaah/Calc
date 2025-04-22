@@ -83,7 +83,6 @@ impl App {
     const YEAR_WIDTH: u16 = 80;
     const NAME_WIDTH: u16 = 162;
     const PAY_WIDTH: u16 = 130;
-    const TIME_WIDTH: u16 = 41;
     const DURATION_WIDTH: u16 = 130;
     const COUNT_WIDTH: u16 = 36;
     const SUM_WIDTH: u16 = 122;
@@ -170,22 +169,12 @@ impl App {
     }
 
     fn time_range(&self) -> Result<TimeRange, Failure> {
-        let hour_begin = self
-            .hour_begin_input
-            .parse()
-            .map_err(|_| Failure::DurationParse)?;
-        let minute_begin = self
-            .minute_begin_input
-            .parse()
-            .map_err(|_| Failure::DurationParse)?;
-        let hour_end = self
-            .hour_end_input
-            .parse()
-            .map_err(|_| Failure::DurationParse)?;
-        let minute_end = self
-            .minute_end_input
-            .parse()
-            .map_err(|_| Failure::DurationParse)?;
+        let parse_map = |input: &str| input.parse().map_err(|_| Failure::DurationParse);
+
+        let hour_begin = parse_map(&self.hour_begin_input)?;
+        let minute_begin = parse_map(&self.minute_begin_input)?;
+        let hour_end = parse_map(&self.hour_end_input)?;
+        let minute_end = parse_map(&self.minute_end_input)?;
 
         let begin = Time::from_hms(hour_begin, minute_begin, 0).map_err(|_| Failure::Duration)?;
         let end = Time::from_hms(hour_end, minute_end, 0).map_err(|_| Failure::Duration)?;
@@ -292,7 +281,7 @@ impl App {
         let date_str = date
             .map(|x| {
                 if show_month {
-                    format!("{} {}", util::short_month(&x.month()), x.day())
+                    format!("{} {}", util::short_month(x.month()), x.day())
                 } else {
                     x.day().to_string()
                 }
@@ -349,21 +338,13 @@ impl App {
         let duration_input = match self.type_selected {
             Some(TypeForPickList::PerHour) => Some(
                 row![
-                    text_input("", &self.hour_begin_input)
-                        .width(Self::TIME_WIDTH)
-                        .on_input(Message::HourBeginInput),
+                    text_input("", &self.hour_begin_input).on_input(Message::HourBeginInput),
                     util::monospace_text(":"),
-                    text_input("", &self.minute_begin_input)
-                        .width(Self::TIME_WIDTH)
-                        .on_input(Message::MinuteBeginInput),
+                    text_input("", &self.minute_begin_input).on_input(Message::MinuteBeginInput),
                     util::monospace_text("-"),
-                    text_input("", &self.hour_end_input)
-                        .width(Self::TIME_WIDTH)
-                        .on_input(Message::HourEndInput),
+                    text_input("", &self.hour_end_input).on_input(Message::HourEndInput),
                     util::monospace_text(":"),
-                    text_input("", &self.minute_end_input)
-                        .width(Self::TIME_WIDTH)
-                        .on_input(Message::MinuteEndInput),
+                    text_input("", &self.minute_end_input).on_input(Message::MinuteEndInput),
                 ]
                 .align_y(alignment::Vertical::Center)
                 .spacing(Self::SPACING),
@@ -473,7 +454,7 @@ impl App {
 
         let calendar_top = row(util::WEEKDAYS.map(|weekday| {
             util::colored_button(
-                text(util::short_weekday(&weekday).to_string())
+                text(util::short_weekday(weekday).to_string())
                     .width(Length::Fill)
                     .align_x(alignment::Horizontal::Center),
                 Color::from_rgb8(0x70, 0x70, 0x70),

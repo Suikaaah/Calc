@@ -76,7 +76,7 @@ impl Config {
         match &self.r#type {
             Type::PerTime => self.pay * count as u32,
             Type::PerHour(tr) => {
-                (count as f32 * self.pay as f32 * Duration::from(tr).as_seconds_f32() / 3600.0)
+                (Duration::from(tr).as_seconds_f32() * (count as u32 * self.pay) as f32 / 3600.0)
                     as u32
             }
         }

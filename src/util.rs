@@ -30,7 +30,7 @@ pub const WEEKDAYS: [Weekday; 7] = [
     Weekday::Saturday,
 ];
 
-pub const fn short_month(month: &Month) -> &str {
+pub const fn short_month(month: Month) -> &'static str {
     match month {
         Month::January => "Jan",
         Month::February => "Feb",
@@ -47,7 +47,7 @@ pub const fn short_month(month: &Month) -> &str {
     }
 }
 
-pub const fn short_weekday(weekday: &Weekday) -> &str {
+pub const fn short_weekday(weekday: Weekday) -> &'static str {
     match weekday {
         Weekday::Sunday => "Sun",
         Weekday::Monday => "Mon",
