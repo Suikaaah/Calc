@@ -6,11 +6,12 @@ mod failure;
 mod util;
 
 use cell::Cell;
-use config::{Config, TimeRange, Type, TypeForPickList};
+use config::{Config, HourMinute, Type, TypeForPickList};
 use failure::Failure;
 use iced::{Color, Element, Length, Size, Theme, alignment, theme, widget};
 use std::{collections::BTreeMap, fs};
-use time::{Date, Duration, Month, Time, Weekday};
+use time::{Date, Duration, Month, Weekday};
+use util::Some;
 
 struct App {
     month_selected: Option<Month>,
@@ -19,10 +20,8 @@ struct App {
     name_input: String,
     type_selected: Option<TypeForPickList>,
     pay_input: String,
-    hour_begin_input: String,
-    minute_begin_input: String,
-    hour_end_input: String,
-    minute_end_input: String,
+    hour_input: String,
+    minute_input: String,
     configs: BTreeMap<String, Config>,
     cells: [Cell; Self::CALENDAR_COLUMNS as usize * Self::CALENDAR_ROWS as usize],
     filename_input: String,
@@ -32,17 +31,23 @@ struct App {
 
 impl Default for App {
     fn default() -> Self {
+        let current_date = util::current_date();
+
         Self {
-            month_selected: Some(Month::January),
+            month_selected: match current_date {
+                Some(x) => x.month().previous(),
+                None => Month::January,
+            }
+            .some(),
             offset_input: Default::default(),
-            year_input: Default::default(),
+            year_input: current_date
+                .map(|x| x.year().to_string())
+                .unwrap_or_default(),
             name_input: Default::default(),
             type_selected: Some(TypeForPickList::PerHour),
             pay_input: Default::default(),
-            hour_begin_input: Default::default(),
-            minute_begin_input: Default::default(),
-            hour_end_input: Default::default(),
-            minute_end_input: Default::default(),
+            hour_input: Default::default(),
+            minute_input: Default::default(),
             configs: Default::default(),
             cells: std::array::from_fn(|_| Default::default()),
             filename_input: Default::default(),
@@ -63,10 +68,8 @@ enum Message {
     PushPressed,
     RemovePressed(String),
     RemoveFilePressed,
-    HourBeginInput(String),
-    MinuteBeginInput(String),
-    HourEndInput(String),
-    MinuteEndInput(String),
+    HourInput(String),
+    MinuteInput(String),
     AddPressed(String),
     CellChecked(bool, u8),
     CellButtonPressed(String, u8),
@@ -83,10 +86,10 @@ impl App {
     const YEAR_WIDTH: u16 = 80;
     const NAME_WIDTH: u16 = 162;
     const PAY_WIDTH: u16 = 130;
-    const DURATION_WIDTH: u16 = 130;
+    const DURATION_WIDTH: u16 = 81;
     const COUNT_WIDTH: u16 = 36;
     const SUM_WIDTH: u16 = 122;
-    const RIGHT_WIDTH: u16 = 670;
+    const RIGHT_WIDTH: u16 = 620;
     const CHECKBOX_SIZE: u16 = 28;
     const RESULT_SIZE: u16 = 32;
     const SPACING: u16 = 6;
@@ -168,20 +171,13 @@ impl App {
             && self.highlight_end().map(|x| date < &x).unwrap_or(false)
     }
 
-    fn time_range(&self) -> Result<TimeRange, Failure> {
+    fn duration(&self) -> Result<HourMinute, Failure> {
         let parse_map = |input: &str| input.parse().map_err(|_| Failure::DurationParse);
 
-        let hour_begin = parse_map(&self.hour_begin_input)?;
-        let minute_begin = parse_map(&self.minute_begin_input)?;
-        let hour_end = parse_map(&self.hour_end_input)?;
-        let minute_end = parse_map(&self.minute_end_input)?;
+        let hour = parse_map(&self.hour_input)?;
+        let minute = parse_map(&self.minute_input)?;
 
-        let time_map = |hour, minute| Time::from_hms(hour, minute, 0).map_err(|_| Failure::Duration);
-
-        let begin = time_map(hour_begin, minute_begin)?;
-        let end = time_map(hour_end, minute_end)?;
-
-        Ok(TimeRange { begin, end })
+        HourMinute::from_hm(hour, minute)
     }
 
     fn config(&self) -> Result<Config, Failure> {
@@ -189,7 +185,7 @@ impl App {
             pay: self.pay()?,
             r#type: match self.r#type() {
                 TypeForPickList::PerTime => Type::PerTime,
-                TypeForPickList::PerHour => Type::PerHour(self.time_range()?),
+                TypeForPickList::PerHour => Type::PerHour(self.duration()?),
             },
         })
     }
@@ -338,19 +334,14 @@ impl App {
         .spacing(Self::SPACING);
 
         let duration_input = match self.type_selected {
-            Some(TypeForPickList::PerHour) => Some(
-                row![
-                    text_input("", &self.hour_begin_input).on_input(Message::HourBeginInput),
-                    util::monospace_text(":"),
-                    text_input("", &self.minute_begin_input).on_input(Message::MinuteBeginInput),
-                    util::monospace_text("-"),
-                    text_input("", &self.hour_end_input).on_input(Message::HourEndInput),
-                    util::monospace_text(":"),
-                    text_input("", &self.minute_end_input).on_input(Message::MinuteEndInput),
-                ]
-                .align_y(alignment::Vertical::Center)
-                .spacing(Self::SPACING),
-            ),
+            Some(TypeForPickList::PerHour) => row![
+                text_input("Hour", &self.hour_input).on_input(Message::HourInput),
+                util::monospace_text(":"),
+                text_input("Minute", &self.minute_input).on_input(Message::MinuteInput),
+            ]
+            .align_y(alignment::Vertical::Center)
+            .spacing(Self::SPACING)
+            .some(),
             _ => None,
         };
 
@@ -395,16 +386,15 @@ impl App {
                     .align_x(alignment::Horizontal::Center)
             };
 
-            Some(
-                row![
-                    top("Name", Self::NAME_WIDTH),
-                    top("Pay", Self::PAY_WIDTH),
-                    top("Duration", Self::DURATION_WIDTH),
-                    top("#", Self::COUNT_WIDTH),
-                    top("Sum", Self::SUM_WIDTH),
-                ]
-                .spacing(Self::SPACING),
-            )
+            row![
+                top("Name", Self::NAME_WIDTH),
+                top("Pay", Self::PAY_WIDTH),
+                top("Duration", Self::DURATION_WIDTH),
+                top("#", Self::COUNT_WIDTH),
+                top("Sum", Self::SUM_WIDTH),
+            ]
+            .spacing(Self::SPACING)
+            .some()
         };
 
         let configs_input_and_top = column![configs_input]
@@ -435,7 +425,7 @@ impl App {
                 util::monospace_text(config.pay_to_string())
                     .width(Self::PAY_WIDTH)
                     .align_x(alignment::Horizontal::Right),
-                util::monospace_text(config.r#type.time_range_to_string())
+                util::monospace_text(config.r#type.duration_to_string())
                     .width(Self::DURATION_WIDTH)
                     .align_x(alignment::Horizontal::Center),
                 util::monospace_text(util::comma_separated(count as u32))
@@ -550,10 +540,8 @@ impl App {
 
                 self.filename_selected = None;
             }
-            Message::HourBeginInput(x) => self.hour_begin_input = x,
-            Message::MinuteBeginInput(x) => self.minute_begin_input = x,
-            Message::HourEndInput(x) => self.hour_end_input = x,
-            Message::MinuteEndInput(x) => self.minute_end_input = x,
+            Message::HourInput(x) => self.hour_input = x,
+            Message::MinuteInput(x) => self.minute_input = x,
             Message::AddPressed(name) => self
                 .cells
                 .iter_mut()
@@ -600,7 +588,7 @@ impl App {
 
 fn main() -> iced::Result {
     const WINDOW_SIZE: Size = Size {
-        width: 1600.0,
+        width: 1550.0,
         height: 800.0,
     };
 

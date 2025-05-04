@@ -3,7 +3,18 @@ use std::{
     collections::VecDeque,
     hash::{DefaultHasher, Hasher},
 };
-use time::{Month, Weekday};
+use time::{Date, Month, Weekday};
+
+pub trait Some {
+    fn some(self) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        Some(self)
+    }
+}
+
+impl<T> Some for T {}
 
 pub const MONTHS: [Month; 12] = [
     Month::January,
@@ -93,7 +104,7 @@ pub fn colored_button<'a, Message>(
     // copied from source
     fn styled(pair: theme::palette::Pair) -> Style {
         Style {
-            background: Some(Background::Color(pair.color)),
+            background: Background::Color(pair.color).some(),
             text_color: pair.text,
             border: rounded_border(),
             ..Style::default()
@@ -131,7 +142,7 @@ pub fn colored_button<'a, Message>(
         match status {
             Status::Active | Status::Pressed => base,
             Status::Hovered => Style {
-                background: Some(Background::Color(palette.primary.strong.color)),
+                background: Background::Color(palette.primary.strong.color).some(),
                 ..base
             },
             Status::Disabled => disabled(base),
@@ -184,4 +195,15 @@ pub const fn weekday_to_column(weekday: Weekday) -> u8 {
         Weekday::Friday => 5,
         Weekday::Saturday => 6,
     }
+}
+
+pub fn current_date() -> Option<Date> {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    use time::UtcDateTime;
+
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .and_then(|timestamp| UtcDateTime::from_unix_timestamp(timestamp.as_secs() as i64).ok())
+        .map(|x| x.date())
 }

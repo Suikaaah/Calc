@@ -1,18 +1,17 @@
-use crate::util;
+use crate::{failure::Failure, util};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
-use time::{Duration, Time};
 
-#[derive(Serialize, Deserialize)]
-pub struct TimeRange {
-    pub begin: Time,
-    pub end: Time,
+#[derive(Clone, Copy, Serialize, Deserialize)]
+pub struct HourMinute {
+    hour: u8,
+    minute: u8,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 pub enum Type {
     PerTime,
-    PerHour(TimeRange),
+    PerHour(HourMinute),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -27,38 +26,53 @@ pub struct Config {
     pub pay: u32,
 }
 
-impl From<&TimeRange> for Duration {
-    fn from(value: &TimeRange) -> Self {
-        let TimeRange { begin, end } = value;
-
-        if begin < end {
-            *end - *begin
-        } else {
-            *end - *begin + Duration::days(1)
-        }
-    }
-}
+pub const TYPES_FOR_PICK_LIST: [TypeForPickList; 2] =
+    [TypeForPickList::PerTime, TypeForPickList::PerHour];
 
 impl Type {
-    pub fn time_range_to_string(&self) -> String {
+    pub fn duration_to_string(&self) -> String {
         match self {
             Self::PerTime => "-".to_string(),
-            Self::PerHour(TimeRange { begin, end }) => format!(
-                "{: >2}:{:02} - {: >2}:{:02}",
-                begin.hour(),
-                begin.minute(),
-                end.hour(),
-                end.minute()
-            ),
+            Self::PerHour(hm) => hm.to_string(),
         }
     }
 }
 
-impl From<&Type> for TypeForPickList {
-    fn from(value: &Type) -> Self {
+impl From<Type> for TypeForPickList {
+    fn from(value: Type) -> Self {
         match value {
             Type::PerTime => Self::PerTime,
             Type::PerHour(_) => Self::PerHour,
+        }
+    }
+}
+
+impl HourMinute {
+    pub const fn minutes(&self) -> u16 {
+        60 * self.hour as u16 + self.minute as u16
+    }
+
+    pub const fn from_hm(hour: u8, minute: u8) -> Result<Self, Failure> {
+        if hour < 24 && minute < 60 {
+            Ok(Self { hour, minute })
+        } else {
+            Err(Failure::Duration)
+        }
+    }
+}
+
+impl Display for HourMinute {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let Self { hour, minute } = self;
+        write!(f, "{hour: >2}:{minute:02}")
+    }
+}
+
+impl Display for TypeForPickList {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::PerTime => write!(f, "¥/#"),
+            Self::PerHour => write!(f, "¥/h"),
         }
     }
 }
@@ -68,29 +82,17 @@ impl Config {
         format!(
             "{} {}",
             util::comma_separated(self.pay),
-            TypeForPickList::from(&self.r#type)
+            TypeForPickList::from(self.r#type)
         )
     }
 
     pub fn sum(&self, count: usize) -> u32 {
-        match &self.r#type {
+        match self.r#type {
             Type::PerTime => self.pay * count as u32,
-            Type::PerHour(tr) => {
-                (Duration::from(tr).as_seconds_f32() * (count as u32 * self.pay) as f32 / 3600.0)
-                    as u32
+            Type::PerHour(hm) => {
+                let total = (hm.minutes() as u32 * count as u32 * self.pay) as f32 / 60.0;
+                total as u32
             }
-        }
-    }
-}
-
-pub const TYPES_FOR_PICK_LIST: [TypeForPickList; 2] =
-    [TypeForPickList::PerTime, TypeForPickList::PerHour];
-
-impl Display for TypeForPickList {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::PerTime => write!(f, "¥/#"),
-            Self::PerHour => write!(f, "¥/h"),
         }
     }
 }
